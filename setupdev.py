@@ -33,6 +33,9 @@ class Repository(object):
     def __str__(self):
         return self.name
 
+    def folder_present(self):
+        return os.path.exists(self.folder)
+
 
 def make_repo(upstream):
     if isinstance(upstream, list):
@@ -102,10 +105,11 @@ def check_system():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Setup a development folder with several related repositories")
     parser.add_argument("repositories",
-                    help="Json file containing the repositories setups")
-    parser.add_argument("profile",
-                    help="Conan profile to build against")
-    parser.add_argument("--package-path", default="SDK/")
+                        help="Path to a Json file containing the repositories setups")
+    parser.add_argument("--profile", default="default",
+                        help="Conan profile to build against")
+    parser.add_argument("--package-prefix", default="SDK/",
+                        help="The installation prefix for package() command")
     args = parser.parse_args()
 
     check_system()
@@ -115,11 +119,15 @@ if __name__ == "__main__":
         upstreams = [clone(make_repo(upstream)) for upstream in config["dependencies"]]
         upstream_references = [export(up) for up in upstreams]
 
-        downstream = clone(make_repo(config["downstream"]))
+        downstream = make_repo(config["downstream"])
+        if (not downstream.folder_present()):
+            clone(downstream)
+        else:
+            print_section("Downstream {} already present: skip cloning".format(downstream))
         lock(downstream, args.profile)
 
         for repo in chain(upstreams, [downstream]):
-            generate(repo, "conan.lock", args.package_path)
+            generate(repo, "conan.lock", args.package_prefix)
             reconfigure(repo, upstreams)
 
         for ref in upstream_references:
