@@ -17,7 +17,7 @@ class PkgAConan(ConanFile):
         "build_tests": False,
     }
 
-    requires = ("boost/1.68@ag/stable",)
+    requires = ("boost/1.71.0@conan/stable",)
 
     build_requires = ("cmake_installer/[>=3.16]@conan/stable",)
 
