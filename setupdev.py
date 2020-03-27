@@ -72,12 +72,13 @@ def remove_export(recipe_reference):
 
 def lock(repo, profile):
     print_section("Graph-lock for {}".format(repo.name))
-    cmd(["conan", "graph", "lock", "-pr", profile, repo.conanpath])
+    cmd(["conan", "graph", "lock", "--build=missing", "-pr", profile, repo.conanpath])
 
 
 def generate(repo, lockfile, packagepath):
     print_section("Generate {}".format(repo.name))
     cmd(["conan", "install",
+          "--build=missing",
           "--install-folder={}".format(repo.buildpath),
           "--lockfile={}".format(lockfile),
           repo.conanpath])
