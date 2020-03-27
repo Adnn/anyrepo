@@ -129,6 +129,10 @@ if __name__ == "__main__":
 
         for repo in chain(upstreams, [downstream]):
             generate(repo, "conan.lock", args.package_prefix)
+
+        # Generate all before reconfiguring all:
+        # Otherwise first repos would be reconfigured with non-gerated dependencies
+        for repo in chain(upstreams, [downstream]):
             reconfigure(repo, upstreams)
 
         for ref in upstream_references:
