@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from itertools import chain
 from subprocess import check_output, run
@@ -36,12 +36,19 @@ class Repository(object):
     def folder_present(self):
         return os.path.exists(self.folder)
 
+    def ensure_cloned(self):
+        if (not self.folder_present()):
+            clone(self)
+        else:
+            print_section("Repo {} already present: skip cloning".format(self))
+        return self
 
-def make_repo(upstream):
+
+def make_repo(upstream, buildfolder):
     if isinstance(upstream, list):
-        return Repository(upstream[0], upstream[1])
+        return Repository(upstream[0], upstream[1], buildfolder=buildfolder)
     else:
-        return Repository(upstream)
+        return Repository(upstream, buildfolder=buildfolder)
 
 
 def cmd(*args):
@@ -111,20 +118,18 @@ if __name__ == "__main__":
                         help="Conan profile to build against")
     parser.add_argument("--package-prefix", default="SDK/",
                         help="The installation prefix for package() command")
+    parser.add_argument("--build-folder", default="build",
+                        help="The subpath in the repository where build takes place")
     args = parser.parse_args()
 
     check_system()
 
     with open(args.repositories) as openfile:
         config = json.load(openfile)
-        upstreams = [clone(make_repo(upstream)) for upstream in config["dependencies"]]
+        upstreams = [make_repo(upstream, args.build_folder).ensure_cloned() for upstream in config["dependencies"]]
         upstream_references = [export(up) for up in upstreams]
 
-        downstream = make_repo(config["downstream"])
-        if (not downstream.folder_present()):
-            clone(downstream)
-        else:
-            print_section("Downstream {} already present: skip cloning".format(downstream))
+        downstream = make_repo(config["downstream"], args.build_folder).ensure_cloned()
         lock(downstream, args.profile)
 
         for repo in chain(upstreams, [downstream]):
