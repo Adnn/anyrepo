@@ -82,8 +82,11 @@ def lock(repo, profile):
     cmd(["conan", "graph", "lock", "--build=missing", "-pr", profile, repo.conanpath])
 
 
-def generate(repo, lockfile, packagepath):
+def generate(repo, lockfile, packagepath, cleanbuild=False):
     print_section("Generate {}".format(repo.name))
+    if cleanbuild and os.path.exists(repo.buildpath):
+        print("Remove build folder '{}'".format(repo.buildpath))
+        shutil.rmtree(repo.buildpath)
     cmd(["conan", "install",
           "--build=missing",
           "--install-folder={}".format(repo.buildpath),
@@ -97,7 +100,7 @@ def generate(repo, lockfile, packagepath):
 
 def reconfigure(repo, upstreams):
     print_section("Reconfigure {}".format(repo.name))
-    defines = ["-D{}_DIR={}".format(up.name, up.buildpath) for up in upstreams if up.name != repo.name]
+    defines = ["-D{}_DIR={}".format(up.name.capitalize(), up.buildpath) for up in upstreams if up.name != repo.name]
     cmd(["cmake", "-S", repo.folder, "-B", repo.buildpath, *defines])
 
 
@@ -119,7 +122,9 @@ if __name__ == "__main__":
     parser.add_argument("--package-prefix", default="SDK/",
                         help="The installation prefix for package() command")
     parser.add_argument("--build-folder", default="build",
-                        help="The subpath in the repository where build takes place")
+                        help="The subpath in each repository where build takes place")
+    parser.add_argument("--clean-build", action="store_true",
+                        help="The build folder of each repository will be removed before build")
     args = parser.parse_args()
 
     check_system()
@@ -133,7 +138,7 @@ if __name__ == "__main__":
         lock(downstream, args.profile)
 
         for repo in chain(upstreams, [downstream]):
-            generate(repo, "conan.lock", args.package_prefix)
+            generate(repo, "conan.lock", args.package_prefix, args.clean_build)
 
         # Generate all before reconfiguring all:
         # Otherwise first repos would be reconfigured with non-gerated dependencies
