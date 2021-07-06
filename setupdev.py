@@ -29,6 +29,7 @@ class Repository(object):
         self.folder = os.path.join(os.getcwd(), self.name)
         self.buildpath = os.path.join(self.folder, buildfolder)
         self.conanpath = os.path.join(self.folder, conanfolder)
+        self.conanfilepath = os.path.join(self.conanpath, "conanfile.py")
 
     def __str__(self):
         return self.name
@@ -78,11 +79,11 @@ def remove_export(recipe_reference):
 
 
 def lock(repo, profile):
-    print_section("Graph-lock for {}".format(repo.name))
-    cmd(["conan", "graph", "lock", "--build=missing", "-pr", profile, repo.conanpath])
+    print_section("Create lock file for {}".format(repo.name))
+    cmd(["conan", "lock", "create", "--build=missing", "-pr", profile, repo.conanfilepath])
 
 
-def generate(repo, lockfile, packagepath, cleanbuild=False):
+def generate(repo, lockfile, references_map, packagepath, cleanbuild=False):
     print_section("Generate {}".format(repo.name))
     if cleanbuild and os.path.exists(repo.buildpath):
         print("Remove build folder '{}'".format(repo.buildpath))
@@ -91,7 +92,8 @@ def generate(repo, lockfile, packagepath, cleanbuild=False):
           "--build=missing",
           "--install-folder={}".format(repo.buildpath),
           "--lockfile={}".format(lockfile),
-          repo.conanpath])
+          repo.conanpath,
+          references_map[repo.name]])
     cmd(["conan", "build",
          "--source-folder={}".format(repo.folder),
          "--build-folder={}".format(repo.buildpath),
@@ -111,6 +113,23 @@ def check_system():
     if packages:
         print ("Aborting: local packages already present in global conan cache:\n{}".format(packages.decode("utf-8")))
         exit(1)
+
+
+def map_requirements(repo):
+    """ Return a map whose key are 'project names' (the name in the recipe) """
+    """ and associated values are the correponding recipe reference """
+    """ (optionally appending a '@' if the reference does not contain one already) """
+    requirement = run(["conan", "info", "-n", "None", repo.conanpath],
+                      capture_output=True, text=True)
+    result = {};
+    for line in requirement.stdout.splitlines():
+        # The line for downstream will be "conanfile.py (downstream/xxx)".
+        line = line.removeprefix("conanfile.py (").removesuffix(")")
+        # There are "messages" in addition to the list of requirements, they tend to have spaces.
+        if not ' ' in line:
+            # Append a '@' after the reference if it does not contain one.
+            result[line.split("/", 1)[0]] = line if "@" in line else (line + "@")
+    return result
 
 
 if __name__ == "__main__":
@@ -136,9 +155,10 @@ if __name__ == "__main__":
 
         downstream = make_repo(config["downstream"], args.build_folder).ensure_cloned()
         lock(downstream, args.profile)
+        references_map = map_requirements(downstream)
 
         for repo in chain(upstreams, [downstream]):
-            generate(repo, "conan.lock", args.package_prefix, args.clean_build)
+            generate(repo, "conan.lock", references_map, args.package_prefix, args.clean_build)
 
         # Generate all before reconfiguring all:
         # Otherwise first repos would be reconfigured with non-gerated dependencies
