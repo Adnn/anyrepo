@@ -88,6 +88,8 @@ def generate(repo, lockfile, references_map, packagepath, cleanbuild=False):
     if cleanbuild and os.path.exists(repo.buildpath):
         print("Remove build folder '{}'".format(repo.buildpath))
         shutil.rmtree(repo.buildpath)
+    # The command now requires the actual reference that dependencies are installed for.
+    # It is found in references_map.
     cmd(["conan", "install",
           "--build=missing",
           "--install-folder={}".format(repo.buildpath),
@@ -150,7 +152,8 @@ if __name__ == "__main__":
 
     with open(args.repositories) as openfile:
         config = json.load(openfile)
-        upstreams = [make_repo(upstream, args.build_folder).ensure_cloned() for upstream in config["dependencies"]]
+        upstreams = [make_repo(upstream, args.build_folder).ensure_cloned()
+                     for upstream in config["dependencies"]]
         upstream_references = [export(up) for up in upstreams]
 
         downstream = make_repo(config["downstream"], args.build_folder).ensure_cloned()
@@ -161,7 +164,10 @@ if __name__ == "__main__":
             generate(repo, "conan.lock", references_map, args.package_prefix, args.clean_build)
 
         # Generate all before reconfiguring all:
-        # Otherwise first repos would be reconfigured with non-gerated dependencies
+        # Otherwise first repos would be reconfigured with non-generated dependencies
+        # Note: reconfiguring will only change the "top_level" `Project_DIR` CMake variable,
+        #   not the different `module_DIR` variables, which will still point into Conan cache.
+        #   Below remove_export will force to re-search for the different modules on next CMake run.
         for repo in chain(upstreams, [downstream]):
             reconfigure(repo, upstreams)
 
